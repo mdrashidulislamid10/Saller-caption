@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seller Caption AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- FIREBASE SDK (COMPAT V9) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;600;700&display=swap');
+        body { font-family: 'Hind Siliguri', sans-serif; background-color: #f0f2f5; transition: background-color 0.3s, color 0.3s; }
+        
+        /* Dark Mode */
+        body.dark-mode { background-color: #18191a; color: #e4e6eb; }
+        .dark-mode .bg-white { background-color: #242526 !important; color: #e4e6eb; }
+        .dark-mode .text-gray-800 { color: #e4e6eb !important; }
+        .dark-mode .text-gray-600 { color: #b0b3b8 !important; }
+        .dark-mode input, .dark-mode textarea, .dark-mode select { background-color: #3a3b3c; color: white; border-color: #3e4042; }
+        .dark-mode nav { background-color: #242526; border-top-color: #3e4042; }
+
+        .hidden-page { display: none; }
+        .active-nav { color: #2563eb; }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Loading Spinner */
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #2563eb; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="pb-20 select-none">
+
+    <!-- SPLASH SCREEN -->
+    <div id="splash-screen" class="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center">
+        <div class="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center shadow-xl mb-4 animate-bounce">
+            <i class="fa-solid fa-pen-nib text-4xl text-white"></i>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-800">Seller Caption</h1>
+        <p class="text-gray-500 text-xs mt-2">Connecting...</p>
+    </div>
+
+    <!-- MAIN HEADER -->
+    <header id="main-header" class="bg-white p-4 shadow-sm sticky top-0 z-50 flex items-center justify-between hidden transition-colors">
+        <h1 class="text-xl font-bold text-blue-600">Seller AI</h1>
+        
+        <div class="flex items-center gap-3">
+            <button onclick="switchPage('plans')" class="bg-yellow-100 text-yellow-600 w-8 h-8 rounded-full flex items-center justify-center border border-yellow-200 shadow-sm">
+                <i class="fa fa-crown text-xs"></i>
+            </button>
+            
+            <button onclick="switchPage('profile')" class="w-9 h-9 rounded-full overflow-hidden border-2 border-blue-100 focus:ring-2 focus:ring-blue-400">
+                <img id="header-profile-img" src="" class="w-full h-full object-cover hidden">
+                <div id="header-profile-icon" class="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500">
+                    <i class="fa fa-user"></i>
+                </div>
+            </button>
+        </div>
+    </header>
+
+    <main class="p-4 max-w-md mx-auto min-h-screen">
+        
+        <!-- HOME PAGE (FEED) -->
+        <section id="page-home" class="page-content hidden-page fade-in">
+            <div id="feed-container" class="space-y-4 pb-16">
+                <!-- Posts will be injected here -->
+            </div>
+        </section>
+
+        <!-- PROFILE PAGE -->
+        <section id="page-profile" class="page-content hidden-page fade-in">
+            <div class="flex justify-between items-start mb-4">
+                <h2 class="text-xl font-bold">আমার প্রোফাইল</h2>
+                <button onclick="switchPage('settings')" class="text-gray-600 hover:text-blue-600 transition p-2 bg-white rounded-full shadow-sm">
+                    <i class="fa fa-cog text-xl"></i>
+                </button>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 text-center mb-6 relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-16 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
+                <div class="relative mt-4">
+                    <div class="w-20 h-20 mx-auto rounded-full border-4 border-white shadow-md overflow-hidden bg-gray-200">
+                        <img id="profile-page-img" src="" class="w-full h-full object-cover hidden">
+                        <i id="profile-page-icon" class="fa fa-user text-3xl text-gray-400 mt-4 block"></i>
+                    </div>
+                </div>
+                <h3 id="profile-name" class="text-lg font-bold mt-2 text-gray-800">ব্যবহারকারী</h3>
+                <p id="profile-email" class="text-xs text-gray-500 mb-2">user@email.com</p>
+                
+                <span id="pro-badge" class="hidden inline-block bg-yellow-400 text-black text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <i class="fa fa-crown mr-1"></i> PRO MEMBER
+                </span>
+            </div>
+
+            <div class="flex border-b border-gray-200 mb-4">
+                <button onclick="switchTab('my-posts')" id="tab-my-posts" class="flex-1 pb-2 text-sm font-bold text-blue-600 border-b-2 border-blue-600">আমার পোস্ট</button>
+                <button onclick="switchTab('favorites')" id="tab-favorites" class="flex-1 pb-2 text-sm font-bold text-gray-400">ফেভারিট</button>
+            </div>
+
+            <div id="profile-content-container" class="space-y-3 pb-20"></div>
+        </section>
+
+        <!-- SETTINGS PAGE -->
+        <section id="page-settings" class="page-content hidden-page fade-in">
+            <div class="flex items-center gap-3 mb-6">
+                <button onclick="switchPage('profile')" class="text-gray-600"><i class="fa fa-arrow-left"></i></button>
+                <h2 class="text-xl font-bold">সেটিংস</h2>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="p-4 border-b border-gray-100 flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center"><i class="fa fa-moon"></i></div>
+                        <span class="font-medium text-sm">ডার্ক মোড</span>
+                    </div>
+                    <button onclick="toggleDarkMode()" id="darkModeBtn" class="w-10 h-5 bg-gray-300 rounded-full relative transition-colors">
+                        <div id="darkModeDot" class="w-3 h-3 bg-white rounded-full absolute top-1 left-1 transition-transform"></div>
+                    </button>
+                </div>
+
+                <button onclick="openEditProfile()" class="w-full p-4 border-b border-gray-100 flex items-center gap-3 hover:bg-gray-50 text-left">
+                    <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><i class="fa fa-user-edit"></i></div>
+                    <span class="font-medium text-sm flex-1">এডিট প্রোফাইল</span>
+                    <i class="fa fa-chevron-right text-gray-400 text-xs"></i>
+                </button>
+
+                <!-- PRIVACY POLICY BUTTON -->
+                <button onclick="switchPage('privacy')" class="w-full p-4 border-b border-gray-100 flex items-center gap-3 hover:bg-gray-50 text-left">
+                    <div class="w-8 h-8 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center"><i class="fa fa-shield-alt"></i></div>
+                    <span class="font-medium text-sm flex-1">প্রাইভেসি পলিসি</span>
+                    <i class="fa fa-chevron-right text-gray-400 text-xs"></i>
+                </button>
+
+                <a href="mailto:bexparbd@gmail.com" class="w-full p-4 border-b border-gray-100 flex items-center gap-3 hover:bg-gray-50 text-left">
+                    <div class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center"><i class="fa fa-envelope"></i></div>
+                    <span class="font-medium text-sm flex-1">সাপোর্ট (ইমেইল)</span>
+                    <i class="fa fa-chevron-right text-gray-400 text-xs"></i>
+                </a>
+
+                <button onclick="handleLogout()" class="w-full p-4 flex items-center gap-3 hover:bg-red-50 text-left text-red-500">
+                    <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center"><i class="fa fa-sign-out-alt"></i></div>
+                    <span class="font-bold text-sm">লগ আউট</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- PRIVACY POLICY PAGE -->
+        <section id="page-privacy" class="page-content hidden-page fade-in">
+            <div class="flex items-center gap-3 mb-6">
+                <button onclick="switchPage('settings')" class="text-gray-600"><i class="fa fa-arrow-left"></i></button>
+                <h2 class="text-xl font-bold">প্রাইভেসি পলিসি</h2>
+            </div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 text-sm text-gray-700 leading-relaxed">
+                <h3 class="font-bold text-lg mb-2">গোপনীয়তা নীতি</h3>
+                <p class="mb-3">Seller Caption AI ব্যবহার করার জন্য ধন্যবাদ। আমরা আপনার তথ্যের গোপনীয়তা রক্ষা করতে প্রতিশ্রুতিবদ্ধ।</p>
+                <ul class="list-disc pl-5 space-y-2 mb-4">
+                    <li>আমরা শুধুমাত্র আপনার ইমেইল এবং নাম সংরক্ষণ করি লগইন সুবিধার জন্য।</li>
+                    <li>আপনার জেনারেট করা কন্টেন্ট আপনার প্রোফাইলে সংরক্ষিত থাকে।</li>
+                    <li>আমরা কোনো তথ্য তৃতীয় পক্ষের কাছে শেয়ার করি না।</li>
+                </ul>
+                <p>যেকোনো প্রয়োজনে আমাদের সাপোর্টে যোগাযোগ করুন।</p>
+            </div>
+        </section>
+
+        <!-- CREATE POST PAGE -->
+        <section id="page-post" class="page-content hidden-page fade-in">
+            <div class="bg-white p-5 rounded-xl shadow-md">
+                <h2 class="text-lg font-bold mb-4">নতুন কন্টেন্ট</h2>
+                <div class="space-y-3">
+                    <input type="text" id="prodName" placeholder="পণ্যের নাম..." class="w-full border p-3 rounded-lg text-sm">
+                    <select id="prodCat" class="w-full border p-3 rounded-lg bg-gray-50 text-sm">
+                        <option value="Fashion">ফ্যাশন</option>
+                        <option value="Electronics">ইলেকট্রনিক্স</option>
+                        <option value="Food">খাবার</option>
+                        <option value="General">অন্যান্য</option>
+                    </select>
+                    <textarea id="prodFeatures" placeholder="বিবরণ..." class="w-full border p-3 rounded-lg h-24 text-sm"></textarea>
+                    <button onclick="generateWithOpenRouter()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg flex justify-center items-center gap-2">
+                        <i class="fa fa-magic"></i> জেনারেট করুন
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- PLANS PAGE -->
+        <section id="page-plans" class="page-content hidden-page fade-in">
+            <div class="bg-white p-6 rounded-2xl shadow-lg border border-yellow-200 text-center mt-4">
+                <i class="fa fa-crown text-4xl text-yellow-500 mb-3"></i>
+                <h2 class="text-2xl font-bold">প্রিমিয়াম মেম্বারশিপ</h2>
+                <p class="text-gray-500 text-sm mb-4">আনলিমিটেড এক্সেস পান</p>
+                <div class="text-3xl font-bold text-blue-600 mb-4">$৯.৯৯</div>
+                <button onclick="openPaymentModal()" class="w-full bg-black text-white py-3 rounded-xl font-bold">কিনুন</button>
+                <button onclick="switchPage('home')" class="mt-4 text-sm text-gray-500">ফিরে যান</button>
+            </div>
+        </section>
+
+        <!-- AUTH PAGES -->
+        <section id="page-login" class="page-content hidden-page fade-in mt-10">
+            <div class="bg-white p-6 rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold text-center mb-6">লগ ইন</h2>
+                <div class="space-y-4">
+                    <input type="email" id="loginEmail" placeholder="ইমেইল" class="w-full border p-3 rounded-lg">
+                    <input type="password" id="loginPass" placeholder="পাসওয়ার্ড" class="w-full border p-3 rounded-lg">
+                    <button onclick="emailLogin()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl">লগ ইন</button>
+                    
+                    <div class="flex items-center gap-2 my-2"><div class="h-px bg-gray-200 flex-1"></div><span class="text-gray-400 text-sm">অথবা</span><div class="h-px bg-gray-200 flex-1"></div></div>
+
+                    <button onclick="googleLogin()" class="w-full border border-gray-300 bg-white text-gray-700 font-medium py-2.5 rounded-xl flex items-center justify-center gap-2">
+                        <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-5 h-5"> Google দিয়ে লগইন
+                    </button>
+                    <p class="text-center text-sm mt-4">একাউন্ট নেই? <button onclick="switchPage('register')" class="text-blue-600 font-bold">রেজিস্ট্রেশন</button></p>
+                </div>
+            </div>
+        </section>
+
+        <section id="page-register" class="page-content hidden-page fade-in mt-5">
+            <div class="bg-white p-6 rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold text-center mb-6">রেজিস্ট্রেশন</h2>
+                <div class="space-y-4">
+                    <input type="text" id="regName" placeholder="নাম" class="w-full border p-3 rounded-lg">
+                    <input type="email" id="regEmail" placeholder="ইমেইল" class="w-full border p-3 rounded-lg">
+                    <input type="password" id="regPass" placeholder="পাসওয়ার্ড" class="w-full border p-3 rounded-lg">
+                    <button onclick="emailRegister()" class="w-full bg-green-600 text-white font-bold py-3 rounded-xl">সাইন আপ</button>
+                    <p class="text-center text-sm mt-4">একাউন্ট আছে? <button onclick="switchPage('login')" class="text-blue-600 font-bold">লগ ইন</button></p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- BOTTOM NAV -->
+    <nav id="bottom-nav" class="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around items-center h-16 shadow z-40 hidden">
+        <button onclick="switchPage('home')" id="nav-home" class="flex flex-col items-center justify-center w-full h-full text-gray-400 active-nav">
+            <i class="fa fa-home text-xl mb-1"></i> <span class="text-[10px]">হোম</span>
+        </button>
+        <button onclick="switchPage('post')" id="nav-post" class="flex flex-col items-center justify-center w-full h-full text-gray-400">
+            <i class="fa fa-plus-circle text-3xl text-blue-600 -translate-y-1"></i>
+        </button>
+        <button onclick="switchPage('profile')" id="nav-profile" class="flex flex-col items-center justify-center w-full h-full text-gray-400">
+            <i class="fa fa-user text-xl mb-1"></i> <span class="text-[10px]">প্রোফাইল</span>
+        </button>
+    </nav>
+
+    <!-- MODALS -->
+    <div id="paymentModal" class="fixed inset-0 bg-black/60 hidden flex items-center justify-center z-[110] p-4">
+        <div class="bg-white rounded-xl w-full max-w-sm p-5">
+            <h3 class="font-bold text-lg mb-4">পেমেন্ট কনফার্ম করুন</h3>
+            <button onclick="confirmPayment()" class="w-full bg-blue-600 text-white font-bold py-2 rounded">Pay $9.99</button>
+            <button onclick="document.getElementById('paymentModal').classList.add('hidden')" class="w-full mt-2 text-gray-500">Cancel</button>
+        </div>
+    </div>
+
+    <div id="editProfileModal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-[110]">
+        <div class="bg-white p-6 rounded-xl w-80 shadow-2xl">
+            <h3 class="text-lg font-bold mb-4">নাম পরিবর্তন করুন</h3>
+            <input type="text" id="editNameInput" class="w-full border p-2 rounded mb-4" placeholder="নতুন নাম">
+            <div class="flex justify-end gap-2">
+                <button onclick="document.getElementById('editProfileModal').classList.add('hidden')" class="px-4 py-2 text-gray-500 text-sm">বাতিল</button>
+                <button onclick="saveProfileEdit()" class="px-4 py-2 bg-blue-600 text-white rounded text-sm font-bold">সেভ করুন</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loader" class="fixed inset-0 bg-white/80 hidden flex items-center justify-center z-[120]"><div class="loader"></div></div>
+    <div id="toastBox" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[130] w-max max-w-xs flex flex-col gap-2 pointer-events-none"></div>
+
+    <script>
+        // ==========================================
+        // 1. FIREBASE CONFIGURATION (YOUR CONFIG)
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBtTwQHj_9kOs0xTFyDfg7aXl_y6p8QJow",
+            authDomain: "fbsaller-ba1fb.firebaseapp.com",
+            databaseURL: "https://fbsaller-ba1fb-default-rtdb.firebaseio.com",
+            projectId: "fbsaller-ba1fb",
+            storageBucket: "fbsaller-ba1fb.firebasestorage.app",
+            messagingSenderId: "603888314282",
+            appId: "1:603888314282:web:e46bd8412274f559aa2dd3",
+            measurementId: "G-PQM3V5VSDV"
+        };
+        
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        let currentUser = null;
+        let currentProfileTab = 'my-posts';
+
+        // ==========================================
+        // 2. AUTH & NAVIGATION
+        // ==========================================
+        auth.onAuthStateChanged((user) => {
+            document.getElementById('splash-screen').style.display = 'none';
+            if (user) {
+                currentUser = user;
+                updateHeaderProfile(user);
+                document.getElementById('main-header').classList.remove('hidden');
+                document.getElementById('bottom-nav').classList.remove('hidden');
+                switchPage('home');
+                loadFeed();
+            } else {
+                currentUser = null;
+                document.getElementById('main-header').classList.add('hidden');
+                document.getElementById('bottom-nav').classList.add('hidden');
+                switchPage('login');
+            }
+        });
+
+        function googleLogin() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    saveUserToDB(result.user);
+                    showToast("লগইন সফল!", "success");
+                })
+                .catch((error) => {
+                    console.error(error);
+                    showToast("Google Login Error.", "error");
+                });
+        }
+
+        function emailLogin() {
+            const e = document.getElementById('loginEmail').value;
+            const p = document.getElementById('loginPass').value;
+            document.getElementById('loader').classList.remove('hidden');
+            auth.signInWithEmailAndPassword(e, p).then(() => {
+                document.getElementById('loader').classList.add('hidden');
+                showToast("স্বাগতম!", "success");
+            }).catch(err => {
+                document.getElementById('loader').classList.add('hidden');
+                showToast(err.message, "error");
+            });
+        }
+
+        function emailRegister() {
+            const n = document.getElementById('regName').value;
+            const e = document.getElementById('regEmail').value;
+            const p = document.getElementById('regPass').value;
+            if(!n || !e || !p) return showToast("সব তথ্য দিন", "error");
+            
+            document.getElementById('loader').classList.remove('hidden');
+            auth.createUserWithEmailAndPassword(e, p).then((cred) => {
+                cred.user.updateProfile({ displayName: n }).then(() => {
+                    saveUserToDB(cred.user);
+                    document.getElementById('loader').classList.add('hidden');
+                    showToast("রেজিস্ট্রেশন সফল", "success");
+                });
+            }).catch(err => {
+                document.getElementById('loader').classList.add('hidden');
+                showToast(err.message, "error");
+            });
+        }
+
+        function handleLogout() {
+            auth.signOut().then(() => showToast("লগ আউট হয়েছে", "info"));
+        }
+
+        function saveUserToDB(user) {
+            db.collection('users').doc(user.uid).set({
+                name: user.displayName || 'User',
+                email: user.email,
+                photoURL: user.photoURL || null,
+                lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+        }
+
+        function updateHeaderProfile(user) {
+            const imgEl = document.getElementById('header-profile-img');
+            const iconEl = document.getElementById('header-profile-icon');
+            if(user.photoURL) {
+                imgEl.src = user.photoURL;
+                imgEl.classList.remove('hidden');
+                iconEl.classList.add('hidden');
+            } else {
+                imgEl.classList.add('hidden');
+                iconEl.classList.remove('hidden');
+            }
+        }
+
+        // ==========================================
+        // 3. PROFILE & SETTINGS LOGIC
+        // ==========================================
+        function loadProfileData() {
+            if(!currentUser) return;
+            
+            document.getElementById('profile-name').innerText = currentUser.displayName || "No Name";
+            document.getElementById('profile-email').innerText = currentUser.email;
+            
+            const pImg = document.getElementById('profile-page-img');
+            const pIcon = document.getElementById('profile-page-icon');
+            
+            if(currentUser.photoURL) {
+                pImg.src = currentUser.photoURL;
+                pImg.classList.remove('hidden');
+                pIcon.classList.add('hidden');
+            } else {
+                pImg.classList.add('hidden');
+                pIcon.classList.remove('hidden');
+            }
+
+            db.collection('users').doc(currentUser.uid).get().then(doc => {
+                if(doc.exists && doc.data().isPro) {
+                    document.getElementById('pro-badge').classList.remove('hidden');
+                }
+            });
+
+            loadProfilePosts();
+        }
+
+        function switchTab(tab) {
+            currentProfileTab = tab;
+            const tabMy = document.getElementById('tab-my-posts');
+            const tabFav = document.getElementById('tab-favorites');
+            
+            if(tab === 'my-posts') {
+                tabMy.className = "flex-1 pb-2 text-sm font-bold text-blue-600 border-b-2 border-blue-600";
+                tabFav.className = "flex-1 pb-2 text-sm font-bold text-gray-400";
+            } else {
+                tabFav.className = "flex-1 pb-2 text-sm font-bold text-blue-600 border-b-2 border-blue-600";
+                tabMy.className = "flex-1 pb-2 text-sm font-bold text-gray-400";
+            }
+            loadProfilePosts();
+        }
+
+        // *** UPDATED FUNCTION TO LOAD POSTS AND FAVORITES (FIXED) ***
+        function loadProfilePosts() {
+            const container = document.getElementById('profile-content-container');
+            container.innerHTML = '<div class="loader mx-auto mt-4"></div>';
+            
+            let query;
+            if(currentProfileTab === 'my-posts') {
+                // *** FIX: Removed .orderBy to prevent Index Error ***
+                query = db.collection('posts').where('uid', '==', currentUser.uid);
+            } else {
+                // *** FIX: Removed .orderBy just in case ***
+                query = db.collection('users').doc(currentUser.uid).collection('favorites');
+            }
+
+            query.get().then(snapshot => {
+                container.innerHTML = "";
+                if(snapshot.empty) {
+                    container.innerHTML = `<div class="text-center text-gray-400 py-10">কোনো পোস্ট নেই</div>`;
+                    return;
+                }
+                snapshot.forEach(doc => {
+                    const post = doc.data();
+                    const isFavTab = currentProfileTab === 'favorites';
+                    container.innerHTML += createPostHTML(post, doc.id, isFavTab);
+                });
+            }).catch(err => {
+                console.error(err);
+                container.innerHTML = `<div class="text-center text-red-400 py-10">লোড করতে সমস্যা হচ্ছে।</div>`;
+            });
+        }
+
+        function openEditProfile() {
+            document.getElementById('editNameInput').value = currentUser.displayName || "";
+            document.getElementById('editProfileModal').classList.remove('hidden');
+        }
+
+        function saveProfileEdit() {
+            const newName = document.getElementById('editNameInput').value;
+            if(newName) {
+                currentUser.updateProfile({ displayName: newName }).then(() => {
+                    db.collection('users').doc(currentUser.uid).update({ name: newName });
+                    document.getElementById('editProfileModal').classList.add('hidden');
+                    loadProfileData(); 
+                    showToast("নাম পরিবর্তন হয়েছে", "success");
+                });
+            }
+        }
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            const dot = document.getElementById('darkModeDot');
+            const btn = document.getElementById('darkModeBtn');
+            
+            if(isDark) {
+                dot.style.transform = 'translateX(20px)';
+                btn.classList.add('bg-purple-600');
+                btn.classList.remove('bg-gray-300');
+            } else {
+                dot.style.transform = 'translateX(0)';
+                btn.classList.add('bg-gray-300');
+                btn.classList.remove('bg-purple-600');
+            }
+        }
+
+        // ==========================================
+        // 4. GENERATE CONTENT
+        // ==========================================
+        async function generateWithOpenRouter() {
+            const name = document.getElementById('prodName').value;
+            const category = document.getElementById('prodCat').value;
+            const features = document.getElementById('prodFeatures').value;
+            
+            if(!name) return showToast("পণ্যের নাম লিখুন", "error");
+            
+            document.getElementById('loader').classList.remove('hidden');
+
+            try {
+                const configDoc = await db.collection('admin_settings').doc('config').get();
+                if (!configDoc.exists) throw new Error("Database Configuration not found!");
+
+                const configData = configDoc.data();
+                const API_KEY = configData.openrouter;
+                const MODEL_NAME = configData.model;
+
+                if(!API_KEY || !MODEL_NAME) throw new Error("API Key or Model missing");
+
+                const systemPrompt = "You are a professional social media marketer in Bangladesh. Write a catchy Facebook post in Bengali. Keep it short and engaging.";
+                const userPrompt = `Product: ${name}\nCategory: ${category}\nDetails: ${features}\nWrite a sales post with emojis.`;
+
+                const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: { 
+                        "Authorization": `Bearer ${API_KEY}`, 
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": window.location.href,
+                        "X-Title": "Seller AI App",
+                    },
+                    body: JSON.stringify({
+                        "model": MODEL_NAME,
+                        "messages": [
+                            {"role": "system", "content": systemPrompt},
+                            {"role": "user", "content": userPrompt}
+                        ]
+                    })
+                });
+
+                if(!res.ok) {
+                    const errData = await res.json();
+                    throw new Error(errData.error?.message || `API Error: ${res.statusText}`);
+                }
+
+                const data = await res.json();
+                if (!data.choices || data.choices.length === 0) throw new Error("No response from AI model.");
+
+                const text = data.choices[0].message.content;
+                
+                await db.collection('posts').add({
+                    uid: currentUser.uid,
+                    content: text,
+                    category: category,
+                    productName: name,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                document.getElementById('loader').classList.add('hidden');
+                showToast("সফল!", "success");
+                
+                document.getElementById('prodName').value = '';
+                document.getElementById('prodFeatures').value = '';
+                
+                switchPage('home');
+                loadFeed();
+
+            } catch (e) {
+                console.error(e);
+                document.getElementById('loader').classList.add('hidden');
+                showToast(e.message, "error");
+            }
+        }
+
+        // ==========================================
+        // 5. UTILS & FEED
+        // ==========================================
+        function loadFeed() {
+            db.collection('posts').orderBy('timestamp', 'desc').limit(20).get().then(snap => {
+                const con = document.getElementById('feed-container');
+                con.innerHTML = "";
+                snap.forEach(doc => con.innerHTML += createPostHTML(doc.data(), doc.id));
+            });
+        }
+
+        function createPostHTML(post, docId, isFavorite = false) {
+            // Check if current user is the owner to show Delete button
+            const isOwner = currentUser && post.uid === currentUser.uid;
+            
+            let deleteAction = `deletePost('${docId}')`;
+            
+            const deleteBtn = isOwner 
+                ? `<button onclick="${deleteAction}" class="text-gray-400 hover:text-red-500 transition"><i class="fa fa-trash"></i></button>` 
+                : '';
+
+            // Safe content for passing to function
+            const safeContent = encodeURIComponent(post.content || '');
+            const favClass = isFavorite ? 'fa-solid text-red-500' : 'fa-regular';
+
+            return `<div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-4">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded">${post.category || 'General'}</span>
+                    <span class="text-[10px] text-gray-400">${post.productName || ''}</span>
+                </div>
+                <p class="mt-2 text-sm text-gray-800 whitespace-pre-wrap">${post.content}</p>
+                <div class="mt-4 pt-3 border-t flex justify-between items-center">
+                    <div class="flex gap-4">
+                        <button onclick="toggleFavorite(this, '${docId}', '${safeContent}', '${post.category}', '${post.productName}')" class="text-gray-400 hover:text-red-500 transition">
+                            <i class="${favClass} fa-heart text-lg"></i>
+                        </button>
+                        ${deleteBtn}
+                    </div>
+                    <button onclick="navigator.clipboard.writeText(\`${post.content.replace(/`/g, "\\`")}\`);showToast('কপি হয়েছে','info')" class="text-xs text-blue-600 font-bold bg-blue-50 px-3 py-1.5 rounded-full hover:bg-blue-100 transition">
+                        <i class="fa fa-copy mr-1"></i> কপি করুন
+                    </button>
+                </div>
+            </div>`;
+        }
+
+        function deletePost(docId) {
+            if(confirm("আপনি কি এই পোস্টটি ডিলিট করতে চান?")) {
+                document.getElementById('loader').classList.remove('hidden');
+                db.collection('posts').doc(docId).delete().then(() => {
+                    document.getElementById('loader').classList.add('hidden');
+                    showToast("পোস্ট ডিলিট হয়েছে", "success");
+                    loadFeed(); 
+                    if(document.getElementById('page-profile').style.display !== 'none') loadProfilePosts();
+                }).catch(err => {
+                    document.getElementById('loader').classList.add('hidden');
+                    showToast("Failed to delete", "error");
+                });
+            }
+        }
+
+        function toggleFavorite(btn, docId, contentEncoded, cat, name) {
+            const content = decodeURIComponent(contentEncoded);
+            const icon = btn.querySelector('i');
+            const isFav = icon.classList.contains('fa-solid'); // Check visual state
+
+            if (isFav) {
+                // Remove from favorites
+                db.collection('users').doc(currentUser.uid).collection('favorites').doc(docId).delete().then(() => {
+                    icon.classList.remove('fa-solid', 'text-red-500');
+                    icon.classList.add('fa-regular');
+                    showToast("ফেভারিট থেকে রিমুভ হয়েছে", "info");
+                    // Refresh if on favorites tab
+                    if(currentProfileTab === 'favorites' && !document.getElementById('page-profile').classList.contains('hidden-page')) {
+                        loadProfilePosts();
+                    }
+                });
+            } else {
+                // Add to favorites
+                db.collection('users').doc(currentUser.uid).collection('favorites').doc(docId).set({
+                    content: content,
+                    category: cat,
+                    productName: name,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                }).then(() => {
+                    icon.classList.add('fa-solid', 'text-red-500');
+                    icon.classList.remove('fa-regular');
+                    showToast("ফেভারিটে যোগ হয়েছে", "success");
+                });
+            }
+        }
+
+        function switchPage(id) {
+            document.querySelectorAll('.page-content').forEach(e => e.classList.add('hidden-page'));
+            document.getElementById('page-' + id).classList.remove('hidden-page');
+            
+            document.querySelectorAll('#bottom-nav button').forEach(b => {
+                b.classList.remove('active-nav', 'text-blue-600');
+                b.classList.add('text-gray-400');
+            });
+            
+            const nav = document.getElementById('nav-' + id);
+            if(nav) { nav.classList.add('active-nav', 'text-blue-600'); nav.classList.remove('text-gray-400'); }
+            
+            if(id === 'profile') loadProfileData();
+        }
+
+        function showToast(msg, type) {
+            const b = document.getElementById('toastBox');
+            const t = document.createElement('div');
+            t.className = `${type==='error'?'bg-red-500':'bg-green-600'} text-white px-4 py-2 rounded shadow text-xs fade-in`;
+            t.innerText = msg;
+            b.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+        
+        function openPaymentModal() { document.getElementById('paymentModal').classList.remove('hidden'); }
+        function confirmPayment() { 
+            document.getElementById('loader').classList.remove('hidden');
+            setTimeout(() => {
+                db.collection('users').doc(currentUser.uid).update({ isPro: true });
+                document.getElementById('loader').classList.add('hidden');
+                document.getElementById('paymentModal').classList.add('hidden');
+                showToast("পেমেন্ট সফল!", "success");
+                if(document.getElementById('page-profile').style.display !== 'none') loadProfileData();
+            }, 1500);
+        }
+    </script>
+</body>
+  </html>
